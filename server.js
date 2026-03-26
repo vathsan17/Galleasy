@@ -1,38 +1,59 @@
-require('dotenv').config(); // MUST be at the very top
+require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-// 1. Middleware
-app.use(cors());
-app.use(express.json());
+// --- 1. Middleware ---
+app.use(cors()); // Prevents "CORS Policy" errors in the browser
+app.use(express.json()); // Allows your server to read JSON sent from the frontend
 
-// 2. Database Configuration
-// This uses the variables from your .env file
+// --- 2. Database Connection ---
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-  ssl: { rejectUnauthorized: false } 
-});
-
-// 3. The Listener Route
-app.get('/api/data', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM your_table_name LIMIT 10;');
-    res.status(200).json({ results: result.rows });
-  } catch (err) {
-    console.error("DB Error:", err.message);
-    res.status(500).json({ error: "Internal Server Error", details: err.message });
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // REQUIRED for Render/Cloud Postgres
   }
 });
 
-// 4. Start the Server
+// Test connection on startup
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('❌ Connection failed:', err.stack);
+  }
+  console.log('✅ Connected to PostgreSQL on Render!');
+  release();
+});
+
+// --- 3. The API Routes ---
+
+// A "Health Check" route to see if the server is alive
+app.get('/', (req, res) => {
+  res.send('Backend Server is Running!');
+});
+
+// The main route to get data from the database
+app.get('/api/data', async (req, res) => {
+  try {
+    // IMPORTANT: Replace 'your_table_name' with an actual table in the DB
+    const result = await pool.query('SELECT * FROM media_items LIMIT 20;');
+    
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error("Query Error:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+});
+
+// --- 4. Start the Server ---
 app.listen(PORT, () => {
-  console.log(`Backend listener is active at http://localhost:${PORT}`);
+  console.log(`🚀 Server listening at http://localhost:${PORT}`);
 });
